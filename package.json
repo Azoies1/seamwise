@@ -1,0 +1,31 @@
+{
+  "name": "seamwise",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clothing quality rating service: evidence in, grade + confidence + reasons out.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "backtest": "tsx backtest/run.ts",
+    "backtest:vision": "tsx --env-file-if-exists=.env backtest/vision.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@fastify/multipart": "^10.1.8",
+    "@google/genai": "^3.5.0",
+    "fastify": "^5.12.8",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

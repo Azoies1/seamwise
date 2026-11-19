@@ -1,0 +1,247 @@
+openapi: 3.0.3
+info:
+  title: Seamwise API
+  version: 0.1.0
+  description: >
+    Clothing quality rating. Send photos and/or product-page text and reviews;
+    get back a grade with a likely range, a confidence level, and reasons that
+    each point to a piece of evidence.
+servers:
+  - url: http://localhost:8787
+security:
+  - bearer: []
+paths:
+  /health:
+    get:
+      summary: Server status and whether image analysis is switched on
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  vision:
+                    type: object
+                    properties:
+                      enabled: { type: boolean }
+                      model: { type: string, nullable: true }
+                  auth_required: { type: boolean }
+  /v1/capture-guide:
+    get:
+      summary: The guided photo steps and upload limits
+      responses:
+        "200": { description: OK }
+  /v1/assessments:
+    post:
+      summary: Assess one garment
+      description: >
+        Send multipart/form-data (preferred) or JSON. At least one of images,
+        page_text or reviews is required. Images must be JPEG, PNG, WebP or GIF,
+        at most 5 MB each and 8 per request. HEIC is rejected: convert to JPEG first.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items: { type: string, format: binary }
+                payload:
+                  type: string
+                  description: JSON string matching AssessmentInput
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AssessmentInput"
+                - type: object
+                  properties:
+                    images:
+                      type: array
+                      maxItems: 8
+                      items:
+                        type: object
+                        required: [data_base64]
+                        properties:
+                          data_base64: { type: string }
+                          capture_kind: { $ref: "#/components/schemas/CaptureKind" }
+      responses:
+        "201":
+          description: The assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    get:
+      summary: All stored assessments, ranked by conservative score (ungraded last)
+      responses:
+        "200": { description: OK }
+  /v1/assessments/{id}:
+    get:
+      summary: Fetch one assessment
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "404": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Required only when the server sets SEAMWISE_API_TOKEN.
+  responses:
+    Error:
+      description: >
+        Error codes: invalid_request, nothing_to_assess, too_many_images,
+        unauthorized, image_too_large, heic_not_supported, unsupported_image,
+        no_garment_detected, not_found, internal_error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+  schemas:
+    Category:
+      type: string
+      enum: [tee, knitwear, denim, outerwear, shirt, other]
+    CaptureKind:
+      type: string
+      nullable: true
+      enum: [full_garment, fabric_macro, seam_interior, care_label, hardware_closeup, backlit_fabric]
+    Grade:
+      type: string
+      enum: [Poor, Below average, Average, Good, Excellent]
+    AssessmentInput:
+      type: object
+      description: Every field is optional.
+      properties:
+        category: { $ref: "#/components/schemas/Category" }
+        brand: { type: string }
+        title: { type: string }
+        price: { type: number, description: "Price bands are defined in USD" }
+        currency: { type: string, example: USD }
+        page_text: { type: string, description: "Product page copy: composition, weight, construction" }
+        reviews:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [text]
+            properties:
+              id: { type: string }
+              text: { type: string }
+              rating: { type: number }
+        capture_kinds:
+          type: array
+          description: capture_kinds[i] says which guided shot image i was meant to be
+          items: { $ref: "#/components/schemas/CaptureKind" }
+    Assessment:
+      type: object
+      properties:
+        id: { type: string }
+        created_at: { type: string, format: date-time }
+        title: { type: string, nullable: true }
+        brand: { type: string, nullable: true }
+        category: { $ref: "#/components/schemas/Category" }
+        category_source: { type: string, enum: [request, vision, default] }
+        status: { type: string, enum: [graded, insufficient_information] }
+        grade: { allOf: [{ $ref: "#/components/schemas/Grade" }], nullable: true }
+        headline: { type: string, example: "Good, likely range Average to Good, medium confidence." }
+        confidence: { type: string, enum: [high, medium, low, insufficient] }
+        score:
+          type: object
+          nullable: true
+          description: 0-100. `conservative` is the low end of the range; rank on it.
+          properties:
+            mean: { type: number }
+            low: { type: number }
+            high: { type: number }
+            conservative: { type: number }
+        likely_range:
+          type: object
+          nullable: true
+          properties:
+            low: { $ref: "#/components/schemas/Grade" }
+            high: { $ref: "#/components/schemas/Grade" }
+        dimensions:
+          type: array
+          items:
+            type: object
+            properties:
+              dimension: { type: string, enum: [fabric, construction, hardware, durability] }
+              weight: { type: number }
+              grade: { type: string, description: "A Grade, or Unknown when nothing was observed" }
+              mean: { type: number }
+              low: { type: number }
+              high: { type: number }
+              evidence_count: { type: integer }
+              summary: { type: string }
+        reasons:
+          type: object
+          properties:
+            for: { type: array, items: { type: string } }
+            against: { type: array, items: { type: string } }
+            unknown: { type: array, items: { type: string } }
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              dimension: { type: string, enum: [fabric, construction, hardware, durability, overall] }
+              claim: { type: string }
+              source:
+                type: object
+                description: "type is one of page_text, image, label, reviews, brand_prior, price, silence"
+              value: { type: number, description: "Quality level 0-100 this claim implies" }
+              sd: { type: number, description: "Smaller = more reliable" }
+              direction: { type: string, enum: [for, against, neutral] }
+              weight: { type: number }
+              contribution: { type: number, description: "Points this item moved the final score" }
+        notes:
+          type: array
+          description: Facts shown for information that carry no quality signal (e.g. country of origin)
+          items: { type: object }
+        next_best_evidence:
+          type: object
+          nullable: true
+          properties:
+            dimension: { type: string }
+            capture_kind: { type: string, description: "A CaptureKind, or reviews / product_page" }
+            prompt: { type: string }
+            expected_range_reduction: { type: number }
+        value:
+          type: object
+          nullable: true
+          description: Quality relative to price. Separate from the quality score and never blended in.
+          properties:
+            index: { type: integer }
+            label: { type: string, enum: [strong value, fair value, poor value] }
+            price_band: { type: string, enum: [budget, mid, premium, luxury] }
+        vision:
+          type: object
+          properties:
+            status: { type: string, enum: [analyzed, no_images, skipped_no_provider, failed] }
+            model: { type: string, nullable: true }
+            detail: { type: string, nullable: true }
+            images: { type: array, items: { type: object } }
+        warnings: { type: array, items: { type: string } }

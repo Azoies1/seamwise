@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seamwise test console</title>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --ink:#1d1c1a; --muted:#6b675f; --line:#dedad0; --accent:#1f5f4a; --bad:#a23b2a; --warn:#8a6100; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151513; --card:#1f1e1b; --ink:#eeeae0; --muted:#a09a8d; --line:#35332e; --accent:#6fc7a6; --bad:#f08a76; --warn:#e2b659; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; } h2 { font-size: 1rem; margin: 22px 0 8px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:14px; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input[type=text], input[type=number], input[type=password], select, textarea { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
+  textarea { min-height: 84px; resize: vertical; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button { margin-top:14px; padding:11px 18px; border:0; border-radius:8px; background:var(--accent); color:var(--bg); font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .headline { font-size:1.25rem; font-weight:650; }
+  .bar { position:relative; height:10px; border-radius:5px; background:var(--line); margin:10px 0 4px; }
+  .bar i { position:absolute; top:0; bottom:0; border-radius:5px; background:var(--accent); opacity:.45; }
+  .bar b { position:absolute; top:-3px; width:3px; height:16px; background:var(--ink); }
+  ul { margin: 4px 0; padding-left: 20px; } li { margin: 2px 0; }
+  .bad { color: var(--bad); } .warn { color: var(--warn); }
+  details { margin-top: 12px; } pre { overflow-x:auto; font-size:.78rem; background:var(--bg); padding:10px; border-radius:8px; }
+  #thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } #thumbs img { width:64px; height:64px; object-fit:cover; border-radius:6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Seamwise test console</h1>
+  <div class="muted" id="status">Checking server…</div>
+
+  <form class="card" id="form">
+    <label for="images">Photos of the garment (up to 8: whole garment, care label, inside seam, fabric close-up, hardware)</label>
+    <input id="images" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+    <div id="thumbs"></div>
+    <div class="row">
+      <div><label for="category">Category</label>
+        <select id="category"><option value="">Detect from photos</option><option>tee</option><option>knitwear</option><option>denim</option><option>outerwear</option><option>shirt</option><option>other</option></select></div>
+      <div><label for="price">Price (USD)</label><input id="price" type="number" min="0" step="0.01"></div>
+    </div>
+    <div class="row">
+      <div><label for="brand">Brand</label><input id="brand" type="text"></div>
+      <div><label for="token">API token (if the server requires one)</label><input id="token" type="password" autocomplete="off"></div>
+    </div>
+    <label for="page">Product page text (optional)</label>
+    <textarea id="page" placeholder="100% cotton, 220 GSM, ring-spun…"></textarea>
+    <label for="reviews">Reviews, one per line (optional)</label>
+    <textarea id="reviews"></textarea>
+    <button id="go" type="submit">Assess</button>
+  </form>
+
+  <div id="result"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+fetch("/health").then((r) => r.json()).then((h) => {
+  $("status").innerHTML = h.vision.enabled
+    ? "Vision is on (" + esc(h.vision.model) + ")."
+    : '<span class="warn">Vision is off: photos will be accepted but not analysed. Set GEMINI_API_KEY (or ANTHROPIC_API_KEY) in .env and restart.</span>';
+}).catch(() => { $("status").textContent = "Server not reachable."; });
+
+$("images").addEventListener("change", () => {
+  $("thumbs").innerHTML = "";
+  for (const f of $("images").files) { const i = new Image(); i.src = URL.createObjectURL(f); $("thumbs").append(i); }
+});
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const payload = {};
+  if ($("category").value) payload.category = $("category").value;
+  if ($("brand").value.trim()) payload.brand = $("brand").value.trim();
+  if ($("price").value) payload.price = Number($("price").value);
+  if ($("page").value.trim()) payload.page_text = $("page").value.trim();
+  const reviews = $("reviews").value.split("\n").map((t) => t.trim()).filter(Boolean).map((text) => ({ text }));
+  if (reviews.length) payload.reviews = reviews;
+  const body = new FormData();
+  body.append("payload", JSON.stringify(payload));
+  for (const f of $("images").files) body.append("images", f);
+  const headers = $("token").value ? { Authorization: "Bearer " + $("token").value } : {};
+  $("go").disabled = true; $("go").textContent = "Assessing…";
+  try {
+    const res = await fetch("/v1/assessments", { method: "POST", body, headers });
+    render(await res.json(), res.ok);
+  } catch (e) { $("result").innerHTML = '<div class="card bad">Request failed: ' + esc(e.message) + "</div>"; }
+  $("go").disabled = false; $("go").textContent = "Assess";
+});
+
+const list = (title, items, cls) => items.length ? "<h2>" + title + "</h2><ul" + (cls ? ' class="' + cls + '"' : "") + ">" + items.map((i) => "<li>" + esc(i) + "</li>").join("") + "</ul>" : "";
+
+function render(a, ok) {
+  if (!ok) { $("result").innerHTML = '<div class="card bad">' + esc(a.error ? a.error.code + ": " + a.error.message : "Error") + "</div>"; return; }
+  let h = '<div class="card"><div class="headline">' + esc(a.headline) + "</div>";
+  h += '<div class="muted">Category: ' + esc(a.category) + " (" + esc(a.category_source) + ") · Vision: " + esc(a.vision.status) + "</div>";
+  if (a.score) h += '<div class="bar"><i style="left:' + a.score.low + "%;width:" + (a.score.high - a.score.low) + '%"></i><b style="left:' + a.score.mean + '%"></b></div><div class="muted">Score ' + a.score.mean + ", likely " + a.score.low + " to " + a.score.high + " · ranks on " + a.score.conservative + "</div>";
+  if (a.value) h += '<div class="muted">Value at this price: ' + esc(a.value.label) + " (" + (a.value.index >= 0 ? "+" : "") + a.value.index + ")</div>";
+  h += list("Warnings", a.warnings, "warn");
+  h += "<h2>By dimension</h2><ul>" + a.dimensions.map((d) => "<li>" + esc(d.summary) + "</li>").join("") + "</ul>";
+  h += list("For", a.reasons.for) + list("Against", a.reasons.against, "bad") + list("Unknown", a.reasons.unknown);
+  if (a.next_best_evidence) h += "<h2>What would help most</h2><div>" + esc(a.next_best_evidence.prompt) + ' <span class="muted">(narrows the range by about ' + a.next_best_evidence.expected_range_reduction + " points)</span></div>";
+  h += list("Also noted", a.notes.map((n) => n.claim));
+  h += "<details><summary>Raw response</summary><pre>" + esc(JSON.stringify(a, null, 2)) + "</pre></details></div>";
+  $("result").innerHTML = h;
+}
+</script>
+</body>
+</html>

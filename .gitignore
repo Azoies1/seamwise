@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/*.json
+backtest/out/
+backtest/images/*
+!backtest/images/README.md

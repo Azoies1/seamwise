@@ -1,0 +1,92 @@
+[
+  {
+    "retailer": "balenciaga",
+    "url": "https://www.balenciaga.com/en-ca/ripped-tape-medium-fit-t-shirt-black-764235TVVU61000.html",
+    "id": "764235TVVU61000",
+    "title": "Men's Ripped Tape Medium Fit T-shirt in Black",
+    "brand": "Balenciaga",
+    "price": 1150,
+    "sale_price": null,
+    "currency": "CAD",
+    "description": "Ripped tape Medium Fit T-Shirt in black dry jersey",
+    "composition": [
+      "Main material: 100% cotton",
+      "Trimming: 99% cotton, 1% elastane"
+    ],
+    "images": [
+      "https://balenciaga.dam.kering.com/asset/582e6c44-2bfa-4ac1-b79c-91f351596fbd/eCom/764235TVVU61000_F.jpg"
+    ]
+  },
+  {
+    "retailer": "balenciaga",
+    "url": "https://www.balenciaga.com/en-ca/balenciaga-%7C-damien-hirst-icons-oversized-t-shirt-washed-black-850345TWVA31055.html",
+    "id": "850345TWVA31055",
+    "title": "Men's Balenciaga | Damien Hirst Icons Oversized T-shirt in Washed Black",
+    "brand": "Balenciaga",
+    "price": 1150,
+    "sale_price": null,
+    "currency": "CAD",
+    "description": "In celebration of the 25th anniversary of Balenciaga's iconic Le City bag, the House collaborates with artist Damien Hirst.",
+    "composition": [
+      "Main material: 100% cotton",
+      "Trimming: 99% cotton, 1% elastane"
+    ],
+    "images": [
+      "https://balenciaga.dam.kering.com/asset/102bb3fb-69ed-455a-bf5e-3834c707d3d7/eCom/850345TWVA31055_F.jpg"
+    ]
+  },
+  {
+    "retailer": "balenciaga",
+    "url": "https://www.balenciaga.com/en-ca/balenciaga-i-automobili-lamborghini-oversized-t-shirt-faded-black-831305TSVQ91083.html",
+    "id": "831305TSVQ91083",
+    "title": "Men's Balenciaga I Automobili Lamborghini Oversized T-shirt in Faded Black",
+    "brand": "Balenciaga",
+    "price": 975,
+    "sale_price": null,
+    "currency": "CAD",
+    "description": "Balenciaga I Automobili Lamborghini Oversized T-Shirt in faded black dry jersey",
+    "composition": [
+      "Main material: 100% cotton",
+      "Trimming: 99% cotton, 1% elastane"
+    ],
+    "images": [
+      "https://balenciaga.dam.kering.com/asset/2d2b685d-e577-4c1a-b306-580ac2b11192/eCom/831305TSVQ91083_F.jpg"
+    ]
+  },
+  {
+    "retailer": "balenciaga",
+    "url": "https://www.balenciaga.com/en-ca/balenciaga-%7C-sega-sonic-the-hedgehog-oversized-t-shirt-black-850345TVVZ41000.html",
+    "id": "850345TVVZ41000",
+    "title": "Men's Balenciaga | Sega Sonic The Hedgehog Oversized T-shirt in Black",
+    "brand": "Balenciaga",
+    "price": 1050,
+    "sale_price": null,
+    "currency": "CAD",
+    "description": "BALENCIAGA | SEGA Sonic the Hedgehog Oversized T-Shirt in black dry jersey",
+    "composition": [
+      "Main material: 100% cotton",
+      "Trimming: 99% cotton, 1% elastane"
+    ],
+    "images": [
+      "https://balenciaga.dam.kering.com/asset/9f239e69-e5e0-41c3-acc4-69012143e884/eCom/850345TVVZ41000_F.jpg"
+    ]
+  },
+  {
+    "retailer": "balenciaga",
+    "url": "https://www.balenciaga.com/en-ca/silver-tape-balenciaga-back-oversized-t-shirt-black-850345TVVE21000.html",
+    "id": "850345TVVE21000",
+    "title": "Men's Silver Tape Balenciaga Back Oversized T-shirt in Black",
+    "brand": "Balenciaga",
+    "price": 1290,
+    "sale_price": null,
+    "currency": "CAD",
+    "description": "Silver Tape Balenciaga Back Oversized T-Shirt in black dry jersey",
+    "composition": [
+      "Main material: 100% cotton",
+      "Trimming: 99% cotton, 1% elastane"
+    ],
+    "images": [
+      "https://balenciaga.dam.kering.com/asset/f7ff88ce-0528-4133-a707-9565d955a2c6/eCom/850345TVVE21000_F.jpg"
+    ]
+  }
+]
