@@ -1,6 +1,6 @@
 # Plan: decision-model vision providers
 
-Status: proposal, 2026-11-18. Probe script in `backtest/decisions-probe.ts`.
+Status: proposal, 2026-11-18. Phase 1 built 2026-11-21 on the `letsdecide` library (see "Built" below). Probe script in `backtest/decisions-probe.ts`.
 
 ## Verdict
 
@@ -71,6 +71,21 @@ What it means:
 
 Next: add non-cotton products to the scrape (wool, polyester, viscose, blends), and run the same probe on Clef.
 
+## Built (2026-11-21): phase 1 on letsdecide
+
+The three adapters are not hand-written: every decision call goes through the published [`letsdecide`](https://www.npmjs.com/package/letsdecide) 0.3.0 library (`src/vision/decisions.ts`). It builds each provider's request (Gemini typed blocks, Clef data URLs, Jev assets) and checks each reply, so switching provider is a `"provider/model"` string. Jev through AIML API is a letsdecide dialect (`aiml/typesafe/jev-1.14`).
+
+- `src/vision/questions.ts` derives 16 choice questions, 4 photo-flag yes/no questions and `garment_category` (21 in all, under Clef's 64) from the zod schema.
+- `src/vision/decision.ts` (`DecisionVision`) sends one call per image, falls back to `not_visible` below `SEAMWISE_DECISION_MIN_CONFIDENCE` (default 0.6), sets flags at p ≥ 0.5, and sums category probabilities across images.
+- `SEAMWISE_PROVIDER` takes `gemini-decisions`, `clef`, `clef-flash`, `jev` and `decisions` (any `SEAMWISE_DECISION_MODEL`). Unset, the generative default is unchanged.
+- The probe now runs on letsdecide too, with its `retry` middleware for free-tier 429s.
+
+Verified live on `gemini-decision-1` (2026-11-21): a full `POST /v1/assessments` with two retailer photos (1.1 s, `vision.status: analyzed`), and the probe re-run on all 45 products with 0 failures: dominant fibre 39/44, 10/10 right at confidence ≥ 0.8, synthetic 42/45, price tier 20/45 exact and 38/45 high vs low, median 1.6 s per product, $0.018 estimated in total. That is within noise of the 2026-11-18 direct-SDK run. Not verified: Clef and Jev (no keys here), and checklist accuracy on real phone photos (experiment 3).
+
+Node note: Node's built-in `fetch` ignores `HTTPS_PROXY`. Behind a proxy, run with `NODE_USE_ENV_PROXY=1` (Node ≥ 22.21).
+
+Still open: `HybridVision` for label OCR, `backtest/vision.ts --provider`, and the ADR 0002 question bank with visibility gates, which would replace the schema-derived questions.
+
 ## Risks
 
 - **Retailer photos are a biased test.** Most products are 100% cotton tees, so "always cotton" already scores well. Report the scores per fibre, not only overall.
@@ -81,12 +96,12 @@ Next: add non-cotton products to the scrape (wool, polyester, viscose, blends), 
 
 ## Tasks
 
-- [ ] `questions.ts`: derive questions from the schema, plus a test that every enum maps
-- [ ] `decision.ts`: `DecisionVision`, the confidence threshold, and a test with a fake adapter
-- [ ] Gemini Decisions adapter
-- [ ] Clef adapter
-- [ ] Jev adapter (optional)
+- [x] `questions.ts`: derive questions from the schema, plus a test that every enum maps
+- [x] `decision.ts`: `DecisionVision`, the confidence threshold, and a test with a fake adapter
+- [x] Gemini Decisions adapter (letsdecide `gemini/*`)
+- [x] Clef adapter (letsdecide `clef/*`; not yet called live)
+- [x] Jev adapter (letsdecide `aiml/*` dialect and `jev/*`; not yet called live)
 - [ ] `HybridVision` for label OCR
-- [ ] Factory and `.env.example` entries, plus a test for provider selection
+- [x] Factory and `.env.example` entries, plus a test for provider selection
 - [ ] `backtest/vision.ts`: accept `--provider` so the same photos can be compared across providers
 - [ ] Experiments 2–5

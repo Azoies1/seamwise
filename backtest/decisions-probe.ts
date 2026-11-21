@@ -4,19 +4,22 @@
  *
  *   npx tsx --env-file=.env backtest/decisions-probe.ts [maxProducts]
  *
- * Needs GEMINI_API_KEY. Uses gemini-decision-1 (override with SEAMWISE_DECISION_MODEL).
+ * Calls go through letsdecide, so any decision model works: SEAMWISE_DECISION_MODEL
+ * is a "provider/model" string (default gemini/gemini-decision-1; also clef/clef-flash,
+ * aiml/typesafe/jev-1.14). Keys: see src/vision/decisions.ts.
  * Writes per-product answers to backtest/out/decisions-probe.json.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GoogleGenAI } from "@google/genai";
+import { compose, retry, type Answer, type Media, type Question } from "letsdecide";
 import { parseComposition } from "../src/extract/pageText.js";
 import { sniffImage } from "../src/server.js";
+import { DEFAULT_DECISION_MODEL, decisionClient } from "../src/vision/decisions.js";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = path.join(root, "data", "retailers");
-const model = process.env.SEAMWISE_DECISION_MODEL || "gemini-decision-1";
+const model = process.env.SEAMWISE_DECISION_MODEL || DEFAULT_DECISION_MODEL;
 const maxProducts = Number(process.argv[2] ?? Infinity);
 const MAX_IMAGES = 4;
 
@@ -30,29 +33,30 @@ const FAMILY: Record<string, string> = {
 };
 const FIBERS = ["cotton", "polyester", "linen", "wool", "acrylic", "viscose", "nylon"];
 
-const questions = {
+const questions: Record<string, Question> = {
   dominant_fiber: {
-    type: "choice" as const,
+    kind: "choice",
     instructions: "Judging only from how the fabric looks in these photos (texture, sheen, drape, wrinkling), which fibre makes up most of this garment? Ignore any product name or marketing text.",
-    criteria: {
+    options: {
       ...Object.fromEntries(FIBERS.map((f) => [f, `Mostly ${f}`])),
       cannot_tell: "The photos do not show the fabric well enough to tell",
     },
   },
   contains_synthetic: {
-    type: "noul" as const,
+    kind: "yesno",
     instructions: "Does the fabric contain a visible share of synthetic fibre (polyester, acrylic, nylon), judging by sheen, pilling or texture?",
   },
   price_tier: {
-    type: "choice" as const,
+    kind: "choice",
     instructions: "Judging only by construction and fabric quality visible in the photos, not by logos or styling, what price tier does this garment belong to?",
-    criteria: {
+    options: {
       budget: "Fast fashion, under $30", mid: "Mid-market, $30-80", premium: "Premium, $80-250", luxury: "Luxury, over $250",
     },
   },
 };
 
-type Answer = { choice?: string; noul?: number; confidence?: number; probabilities?: Record<string, number> };
+type Choice = Extract<Answer, { kind: "choice" }>;
+const asChoice = (a: Answer | undefined) => (a?.kind === "choice" ? (a as Choice) : undefined);
 
 function truth(composition: string[]): { fiber: string | null; synthetic: boolean } {
   const parts = parseComposition(composition.join(", "))?.parts ?? [];
@@ -67,7 +71,8 @@ function truth(composition: string[]): { fiber: string | null; synthetic: boolea
   return { fiber: top, synthetic };
 }
 
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// The free tier rate-limits bursts; retry honours Retry-After.
+const decide = compose(decisionClient(), retry({ maxAttempts: 6, baseMs: 2000, maxMs: 60000 }));
 const products = readdirSync(dataDir).filter((f) => f.endsWith(".json"))
   .flatMap((f) => JSON.parse(readFileSync(path.join(dataDir, f), "utf8")) as { retailer: string; id: string; title: string; composition: string[] }[]);
 
@@ -80,7 +85,7 @@ for (const p of products) {
   const input = readdirSync(dir).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).sort().slice(0, MAX_IMAGES).flatMap((f) => {
     const bytes = readFileSync(path.join(dir, f));
     const mime = sniffImage(bytes);
-    return mime && mime !== "heic" ? [{ type: "image" as const, data: bytes.toString("base64"), mime_type: mime }] : [];
+    return mime && mime !== "heic" ? [{ data: bytes.toString("base64"), mime_type: mime } satisfies Media] : [];
   });
   if (input.length === 0) continue;
   done++;
@@ -88,14 +93,16 @@ for (const p of products) {
   const t = truth(p.composition);
   const started = Date.now();
   try {
-    const res = await client.decisions.create({ model, input, questions, api_version: "v1beta" } as never);
-    const a = (res.answers ?? {}) as Record<string, Answer>;
+    const res = await decide(model, { input: "Photos of one garment from a retailer's product page.", media: input, questions });
+    const fiber = asChoice(res.answers.dominant_fiber);
+    const tier = asChoice(res.answers.price_tier);
+    const synth = res.answers.contains_synthetic;
     const row = {
       product: `${p.retailer}/${p.id}`, title: p.title, images: input.length, ms: Date.now() - started,
-      true_fiber: t.fiber, got_fiber: a.dominant_fiber?.choice, fiber_conf: a.dominant_fiber?.confidence,
-      true_synthetic: t.synthetic, p_synthetic: a.contains_synthetic?.noul,
-      true_tier: TIER[p.retailer], got_tier: a.price_tier?.choice, tier_probs: a.price_tier?.probabilities,
-      input_tokens: (res.usage as { total_input_tokens?: number } | undefined)?.total_input_tokens,
+      true_fiber: t.fiber, got_fiber: fiber?.choice, fiber_conf: fiber ? (fiber.confidence ?? fiber.probabilities[fiber.choice]) : undefined,
+      true_synthetic: t.synthetic, p_synthetic: synth?.kind === "yesno" ? synth.probability : undefined,
+      true_tier: TIER[p.retailer], got_tier: tier?.choice, tier_probs: tier?.probabilities,
+      input_tokens: res.input_tokens, estimated_cost_usd: res.estimated_cost_usd,
     };
     rows.push(row);
     console.log(`${row.product.padEnd(36)} fiber ${String(t.fiber).padEnd(9)} got ${String(row.got_fiber).padEnd(11)} (${row.fiber_conf?.toFixed(2)})  tier ${row.true_tier}/${row.got_tier}  ${row.ms}ms`);
