@@ -29,13 +29,20 @@ To analyse photos, put a key in `.env` (already created from `.env.example`): `G
 for training and human review: photograph garments only, no people or personal details. Without a key the service still runs: it scores
 from text and reviews, accepts photos, and reports `vision.status: "skipped_no_provider"`.
 
+**Decision models (faster, with probabilities):** set `SEAMWISE_PROVIDER=gemini-decisions`
+(same `GEMINI_API_KEY`), `clef-flash`, `clef` or `jev`. These go through the
+[`letsdecide`](https://www.npmjs.com/package/letsdecide) library, so any of its providers works via
+`SEAMWISE_PROVIDER=decisions` and `SEAMWISE_DECISION_MODEL=provider/model`. They fill the checklist in
+about 1–2 s per photo, but leave label text empty. See `.env.example` and
+[docs/decision-providers-plan.md](docs/decision-providers-plan.md).
+
 Before exposing it beyond your own machine, set `SEAMWISE_API_TOKEN` in `.env`.
 
 ## Test it
 
 | Command | What it checks | Needs a key |
 |---|---|---|
-| `npm test` | 52 tests: scoring rules, extraction, the HTTP API with real multipart uploads | no |
+| `npm test` | 64 tests: scoring rules, extraction, the HTTP API with real multipart uploads | no |
 | `npm run backtest` | 38 hand-graded cases: grade agreement, refusals, orderings | no |
 | `npm run backtest:vision` | Whether the vision model reads your real photos correctly | yes (either provider), plus photos |
 | `npm run typecheck` | TypeScript | no |
@@ -51,6 +58,8 @@ Verified here, without a key:
 
 Not verified yet:
 
+- **Decision-model vision** (`src/vision/decision.ts`) ran end to end on `gemini-decision-1`
+  with retailer photos; Clef and Jev have not been called. Checklist accuracy on phone photos is untested.
 - **The Anthropic vision call** (`src/vision/provider.ts`) type-checks but has never run
   against the real API.
 - **Gemini on real garments.** `src/vision/gemini.ts` ran once end to end against the real API
